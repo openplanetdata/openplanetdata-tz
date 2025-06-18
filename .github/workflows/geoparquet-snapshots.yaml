@@ -1,0 +1,54 @@
+# .github/workflows/tz-parquet.yml
+name: Build & publish TZ GeoParquet
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'   # daily 01:00 UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      REMOTE_NAME: openplanetdata-r2
+    steps:
+      # ── get latest TZ boundaries ─────────────────────────────────────────
+      - name: Download timezone GeoJSON
+        run: |
+          curl -L -o tz.zip \
+            https://github.com/evansiroky/timezone-boundary-builder/releases/latest/download/timezones-with-oceans.geojson.zip
+          unzip -j tz.zip -d .
+          mv combined-with-oceans.json planet-tz.geojson
+
+      # ── convert → GeoParquet with stable GDAL container ─────────────
+      - name: Convert GeoJSON → GeoParquet
+        run: |
+          docker run --rm -v "$PWD":/data \
+            ghcr.io/osgeo/gdal:ubuntu-full-3.11.0 \
+            ogr2ogr -f Parquet /data/planet-tz.geoparquet /data/planet-tz.geojson \
+                    -lco GEOMETRY_ENCODING=WKB
+
+      # ── checksum + metadata ──────────────────────────────────────────────
+      - name: SHA-256 and metadata
+        run: |
+          shasum -a 256 planet-tz.geoparquet > planet-tz.geoparquet.sha256
+          stat -c '%s %W %Z' planet-tz.geoparquet | \
+            awk '{print "{\"created\":"($2==0?$3:$2)",\"size\":"$1"}"}' \
+            > planet-tz.geoparquet.metadata
+
+      # ── upload to R2 via rclone ──────────────────────────────────────────
+      - name: Install rclone
+        env:
+          RCLONE_CONFIG_DATA: ${{ secrets.RCLONE_CONFIG_DATA }}
+        run: |
+          mkdir -p ~/.config/rclone
+          printf '%s' "$RCLONE_CONFIG_DATA" > ~/.config/rclone/rclone.conf
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Upload to R2
+        env:
+          RCLONE_CONFIG_DATA: ${{ secrets.RCLONE_CONFIG_DATA }}
+        run: |
+          rclone copyto planet-tz.geoparquet          "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.geoparquet"
+          rclone copyto planet-tz.geoparquet.metadata "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.geoparquet.metadata"
+          rclone copyto planet-tz.geoparquet.sha256   "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.geoparquet.sha256"
