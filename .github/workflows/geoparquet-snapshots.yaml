@@ -1,4 +1,3 @@
-# .github/workflows/tz-parquet.yml
 name: Build & publish TZ GeoParquet
 
 on:
