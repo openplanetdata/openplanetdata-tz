@@ -24,16 +24,16 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/data \
             ghcr.io/osgeo/gdal:ubuntu-full-3.11.0 \
-            ogr2ogr -f Parquet /data/planet-tz.geoparquet /data/planet-tz.geojson \
+            ogr2ogr -f Parquet /data/planet-tz.parquet /data/planet-tz.geojson \
                     -lco GEOMETRY_ENCODING=WKB
 
       # ── checksum + metadata ──────────────────────────────────────────────
       - name: SHA-256 and metadata
         run: |
-          shasum -a 256 planet-tz.geoparquet > planet-tz.geoparquet.sha256
-          stat -c '%s %W %Z' planet-tz.geoparquet | \
+          shasum -a 256 planet-tz.parquet > planet-tz.parquet.sha256
+          stat -c '%s %W %Z' planet-tz.parquet | \
             awk '{print "{\"created\":"($2==0?$3:$2)",\"size\":"$1"}"}' \
-            > planet-tz.geoparquet.metadata
+            > planet-tz.parquet.metadata
 
       # ── upload to R2 via rclone ──────────────────────────────────────────
       - name: Install rclone
@@ -48,6 +48,6 @@ jobs:
         env:
           RCLONE_CONFIG_DATA: ${{ secrets.RCLONE_CONFIG_DATA }}
         run: |
-          rclone copyto planet-tz.geoparquet          "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.geoparquet"
-          rclone copyto planet-tz.geoparquet.metadata "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.geoparquet.metadata"
-          rclone copyto planet-tz.geoparquet.sha256   "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.geoparquet.sha256"
+          rclone copyto planet-tz.parquet          "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.parquet"
+          rclone copyto planet-tz.parquet.metadata "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.parquet.metadata"
+          rclone copyto planet-tz.parquet.sha256   "$REMOTE_NAME:openplanetdata/tz/planet/geoparquet/planet-latest.tz.parquet.sha256"
