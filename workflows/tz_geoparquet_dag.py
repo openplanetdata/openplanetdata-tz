@@ -17,6 +17,7 @@ from docker.types import Mount
 from elaunira.airflow.providers.r2index.operators import UploadItem
 from openplanetdata.airflow.defaults import (
     DOCKER_MOUNT,
+    GDAL_IMAGE,
     OPENPLANETDATA_IMAGE,
     OPENPLANETDATA_WORK_DIR,
     R2_BUCKET,
@@ -72,7 +73,7 @@ with DAG(
     convert_to_parquet = DockerOperator(
         task_id="convert_geojson_to_geoparquet",
         task_display_name="Convert GeoJSON to GeoParquet",
-        image="ghcr.io/osgeo/gdal:ubuntu-full-latest",
+        image=GDAL_IMAGE,
         command=f"""bash -c '
             ogr2ogr -f Parquet {PARQUET_PATH} {WORK_DIR}/planet-tz.geojson \
                     -lco GEOMETRY_ENCODING=WKB &&
