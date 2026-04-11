@@ -105,11 +105,11 @@ with DAG(
             tags=["geoparquet", "public", "timezone"],
         )]
 
-    @task(task_display_name="Done")
+    @task(task_id="tz_geoparquet_done", task_display_name="Done")
     def done() -> None:
         """No-op gate task to propagate upstream failures to DAG run state."""
 
-    @task(task_display_name="Cleanup", trigger_rule="all_done")
+    @task(task_id="tz_geoparquet_cleanup", task_display_name="Cleanup", trigger_rule="all_done")
     def cleanup() -> None:
         """Clean up working directory."""
         shutil.rmtree(WORK_DIR, ignore_errors=True)
