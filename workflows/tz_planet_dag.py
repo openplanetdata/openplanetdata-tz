@@ -10,6 +10,12 @@ Produces Assets:
   - openplanetdata-tz-planet-geojson
   - openplanetdata-tz-planet-geopackage
   - openplanetdata-tz-planet-geoparquet
+
+Scheduling policy: every task runs in the shared "cortex" pool, whose slots
+are GiB of memory on the edge host. Each task reserves the most memory it can
+use (Docker containers are capped to the same value), so tasks from every
+project only start when their memory fits. The absolute priority weight of
+1000 sits below the Ipregistry tasks, which always take a free slot first.
 """
 
 import shutil
@@ -32,6 +38,13 @@ WORK_DIR = f"{OPENPLANETDATA_WORK_DIR}/tz/planet"
 GEOJSON_PATH = f"{WORK_DIR}/planet-tz.geojson"
 GEOPACKAGE_PATH = f"{WORK_DIR}/planet-tz.gpkg"
 PARQUET_PATH = f"{WORK_DIR}/planet-tz.parquet"
+
+CORTEX_POOL = "cortex"
+OPENPLANETDATA_PRIORITY_WEIGHT = 1000
+
+# Container caps in GiB, reserved as pool slots by the task running them.
+DOWNLOAD_MEM_GIB = 2
+OGR2OGR_MEM_GIB = 8
 
 GEOJSON_ASSET = Asset(
     name="openplanetdata-tz-planet-geojson",
@@ -57,9 +70,12 @@ with DAG(
         "execution_timeout": timedelta(hours=1),
         "executor": "airflow.providers.edge3.executors.EdgeExecutor",
         "owner": "openplanetdata",
-        "pool": "openplanetdata_tz",
+        "pool": CORTEX_POOL,
+        "pool_slots": 1,
+        "priority_weight": OPENPLANETDATA_PRIORITY_WEIGHT,
         "queue": "cortex",
         "retries": 0,
+        "weight_rule": "absolute",
     },
     description="Build planet timezone boundaries in GeoJSON, GeoPackage, and GeoParquet",
     doc_md=__doc__,
@@ -86,6 +102,8 @@ with DAG(
         mounts=[Mount(**DOCKER_MOUNT)],
         mount_tmp_dir=False,
         auto_remove="success",
+        mem_limit=f"{DOWNLOAD_MEM_GIB}g",
+        pool_slots=DOWNLOAD_MEM_GIB,
     )
 
     convert_to_geopackage = DockerOperator(
@@ -100,6 +118,8 @@ with DAG(
         mounts=[Mount(**DOCKER_MOUNT)],
         mount_tmp_dir=False,
         auto_remove="success",
+        mem_limit=f"{OGR2OGR_MEM_GIB}g",
+        pool_slots=OGR2OGR_MEM_GIB,
     )
 
     convert_to_geoparquet = DockerOperator(
@@ -115,6 +135,8 @@ with DAG(
         mounts=[Mount(**DOCKER_MOUNT)],
         mount_tmp_dir=False,
         auto_remove="success",
+        mem_limit=f"{OGR2OGR_MEM_GIB}g",
+        pool_slots=OGR2OGR_MEM_GIB,
     )
 
     @task.r2index_upload(
